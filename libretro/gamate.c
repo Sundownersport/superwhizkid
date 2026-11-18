@@ -94,7 +94,7 @@ static void readInput(void) {
 	BUTTON(RETRO_DEVICE_ID_JOYPAD_START, 6);
 	BUTTON(RETRO_DEVICE_ID_JOYPAD_SELECT, 7);
 #undef BUTTON
-	gamate.buttons = buttons;
+	gamateSetButtons(&gamate, buttons);
 }
 
 void retro_run(void) {
