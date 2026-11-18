@@ -17,13 +17,59 @@ static struct Gamate gamate;
 static bool loaded;
 static uint16_t video[GAMATE_WIDTH * GAMATE_HEIGHT];
 static int16_t audio[2048 * 2];
+static const uint16_t palette[4] = { 0xCE93, 0x8CEB, 0x5327, 0x1102 };
+static uint16_t shades[3 * 256 + 1];
+static uint16_t lcdLevel[GAMATE_WIDTH * GAMATE_HEIGHT];
+static unsigned lcdDarken = 256, lcdFade = 256;
+static bool lcdSnap = true;
 
 static void message(const char* text) {
 	struct retro_message msg = { text, 300 };
 	environCb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
 }
 
-void retro_set_environment(retro_environment_t cb) { environCb = cb; }
+void retro_set_environment(retro_environment_t cb) {
+	environCb = cb;
+	static const struct retro_variable variables[] = {
+		{ "superwhizkid_lcd_ghosting", "LCD ghosting; light|heavy|off" },
+		{ NULL, NULL }
+	};
+	environCb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*) variables);
+}
+
+static void readOptions(void) {
+	struct retro_variable var = { "superwhizkid_lcd_ghosting", NULL };
+	const char* value = environCb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value ? var.value : "light";
+	if (!strcmp(value, "off")) {
+		lcdDarken = lcdFade = 256;
+	} else if (!strcmp(value, "heavy")) {
+		lcdDarken = 128;
+		lcdFade = 32;
+	} else {
+		lcdDarken = 192;
+		lcdFade = 64;
+	}
+}
+
+static uint16_t blend565(uint16_t a, uint16_t b, unsigned t) {
+	unsigned r = ((a >> 11) * (256 - t) + (b >> 11) * t) >> 8;
+	unsigned g = (((a >> 5) & 63) * (256 - t) + ((b >> 5) & 63) * t) >> 8;
+	unsigned bl = ((a & 31) * (256 - t) + (b & 31) * t) >> 8;
+	return (uint16_t) (r << 11 | g << 5 | bl);
+}
+
+// The Gamate LCD responds slowly, so games can leave sprites erased for a frame without it showing.
+static void renderLcd(void) {
+	for (size_t i = 0; i < GAMATE_WIDTH * GAMATE_HEIGHT; i++) {
+		int target = (gamate.frameBuffer[i] & 3) * 256, level = lcdLevel[i];
+		int rate = target > level ? lcdDarken : lcdFade;
+		int step = (target - level) * rate / 256;
+		level = lcdSnap || !step ? target : level + step;
+		lcdLevel[i] = (uint16_t) level;
+		video[i] = shades[level];
+	}
+	lcdSnap = false;
+}
 void retro_set_video_refresh(retro_video_refresh_t cb) { videoCb = cb; }
 void retro_set_audio_sample(retro_audio_sample_t cb) { (void) cb; }
 void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audioCb = cb; }
@@ -32,6 +78,9 @@ void retro_set_input_state(retro_input_state_t cb) { inputStateCb = cb; }
 
 void retro_init(void) {
 	gamateInit(&gamate);
+	for (unsigned i = 0; i < sizeof(shades) / sizeof(*shades); i++) {
+		shades[i] = i == 3 * 256 ? palette[3] : blend565(palette[i >> 8], palette[(i >> 8) + 1], i & 255);
+	}
 	enum retro_pixel_format format = RETRO_PIXEL_FORMAT_RGB565;
 	environCb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &format);
 	static const struct retro_controller_description ports[] = { { "Gamate", RETRO_DEVICE_JOYPAD } };
@@ -79,6 +128,7 @@ void retro_set_controller_port_device(unsigned port, unsigned device) {
 
 void retro_reset(void) {
 	if (loaded) gamateReset(&gamate);
+	lcdSnap = true;
 }
 
 static void readInput(void) {
@@ -101,9 +151,10 @@ void retro_run(void) {
 	if (!loaded) return;
 	readInput();
 	gamateSetAudio(&gamate, audio, sizeof(audio) / sizeof(audio[0]) / 2, 48000);
+	bool updated = false;
+	if (environCb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) readOptions();
 	gamateRunFrame(&gamate);
-	static const uint16_t palette[4] = { 0xCE93, 0x8CEB, 0x5327, 0x1102 };
-	for (size_t i = 0; i < sizeof(video) / sizeof(*video); i++) video[i] = palette[gamate.frameBuffer[i] & 3];
+	renderLcd();
 	videoCb(video, GAMATE_WIDTH, GAMATE_HEIGHT, GAMATE_WIDTH * sizeof(*video));
 	size_t frames = gamate.audioCount < gamate.audioCapacity ? gamate.audioCount : gamate.audioCapacity;
 	audioCb(audio, frames);
@@ -137,6 +188,8 @@ bool retro_load_game(const struct retro_game_info* game) {
 		message("superwhizkid: unsupported cartridge size");
 		return false;
 	}
+	readOptions();
+	lcdSnap = true;
 	loaded = true;
 	return true;
 }
@@ -154,7 +207,10 @@ void retro_unload_game(void) {
 unsigned retro_get_region(void) { return RETRO_REGION_NTSC; }
 size_t retro_serialize_size(void) { return gamateStateSize(&gamate); }
 bool retro_serialize(void* data, size_t size) { return loaded && gamateSaveState(&gamate, data, size); }
-bool retro_unserialize(const void* data, size_t size) { return loaded && gamateLoadState(&gamate, data, size); }
+bool retro_unserialize(const void* data, size_t size) {
+	lcdSnap = true;
+	return loaded && gamateLoadState(&gamate, data, size);
+}
 void retro_cheat_reset(void) { }
 void retro_cheat_set(unsigned index, bool enabled, const char* code) { (void) index; (void) enabled; (void) code; }
 
