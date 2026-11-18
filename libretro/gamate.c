@@ -30,25 +30,31 @@ static void message(const char* text) {
 
 void retro_set_environment(retro_environment_t cb) {
 	environCb = cb;
+	static const struct retro_core_option_definition options[] = {
+		{ "superwhizkid_lcd_ghosting", "LCD ghosting", "Fades pixels like the slow Gamate LCD, so sprites the game redraws don't flash.",
+			{ { "off", NULL }, { "1", NULL }, { "2", NULL }, { "3", NULL }, { "4", NULL }, { "5", NULL }, { NULL, NULL } }, "3" },
+		{ NULL, NULL, NULL, { { NULL, NULL } }, NULL }
+	};
 	static const struct retro_variable variables[] = {
-		{ "superwhizkid_lcd_ghosting", "LCD ghosting; light|heavy|off" },
+		{ "superwhizkid_lcd_ghosting", "LCD ghosting; 3|4|5|off|1|2" },
 		{ NULL, NULL }
 	};
-	environCb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*) variables);
+	unsigned version = 0;
+	if (environCb(RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION, &version) && version >= 1) {
+		environCb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS, (void*) options);
+	} else {
+		environCb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*) variables);
+	}
 }
 
 static void readOptions(void) {
 	struct retro_variable var = { "superwhizkid_lcd_ghosting", NULL };
-	const char* value = environCb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value ? var.value : "light";
-	if (!strcmp(value, "off")) {
-		lcdDarken = lcdFade = 256;
-	} else if (!strcmp(value, "heavy")) {
-		lcdDarken = 128;
-		lcdFade = 32;
-	} else {
-		lcdDarken = 192;
-		lcdFade = 64;
-	}
+	const char* value = environCb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value ? var.value : "3";
+	static const unsigned darken[] = { 256, 256, 248, 240, 224, 208 };
+	static const unsigned fade[] = { 256, 224, 192, 160, 128, 96 };
+	int level = !strcmp(value, "off") ? 0 : value[0] >= '1' && value[0] <= '5' && !value[1] ? value[0] - '0' : 3;
+	lcdDarken = darken[level];
+	lcdFade = fade[level];
 }
 
 static uint16_t blend565(uint16_t a, uint16_t b, unsigned t) {
