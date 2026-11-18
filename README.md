@@ -27,6 +27,12 @@ For local compatibility testing with legally obtained images:
 tools/gamate-sweep.sh /path/to/gamate/files 300 build/gamateboot
 ```
 
+## Releases
+
+The manual **Build and package cores** GitHub Action builds spruce-compatible ARMHF and ARM64
+libretro cores. Supply a release tag when invoking it; after both builds and architecture/ABI checks
+pass, it creates or replaces that tag and uploads a combined package to a draft GitHub release.
+
 ## Provenance and license
 
 superwhizkid began development inside a fork of armNES, but its Gamate implementation was authored

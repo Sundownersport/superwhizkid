@@ -66,6 +66,33 @@ hardware measurements take precedence where they conflict with an emulator.
   implemented by the core. This metadata affects frontend feature discovery only; it does not
   supply or replace serialization behavior.
 
+## Build and release infrastructure references
+
+### spruceUI Cores-spruce
+
+- Repository: <https://github.com/spruceUI/Cores-spruce>
+- Reference workflow: <https://github.com/spruceUI/Cores-spruce/blob/main/.github/workflows/build-armnes.yml>
+- Toolchain definitions: <https://github.com/spruceUI/Cores-spruce/blob/main/Dockerfile.arm64>,
+  <https://github.com/spruceUI/Cores-spruce/blob/main/Dockerfile.armhf>,
+  <https://github.com/spruceUI/Cores-spruce/blob/main/toolchain-arm64.cmake>, and
+  <https://github.com/spruceUI/Cores-spruce/blob/main/toolchain-armhf.cmake>.
+- Used for: the supported ARM64/ARMHF hardware classes, public `toolchains` release assets,
+  Cortex-A53 and Cortex-A7 compiler targets, A30/Miyoo ARMHF glibc 2.23 ceiling, Ubuntu Focal ARM64
+  glibc 2.31 ceiling, and spruce package layout (`cores/`, `cores64/`, and core-info metadata).
+- Implementation impact: the manual release workflow consumes the same public Docker images, checks
+  both output architectures and glibc symbol ceilings, and packages both cores together. Its tag and
+  draft-release lifecycle is independently written for this repository's explicit release-tag input.
+
+### GitHub Actions and GitHub CLI documentation
+
+- Manual-workflow documentation: <https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow>
+- Workflow syntax: <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax>
+- Release creation: <https://cli.github.com/manual/gh_release_create>
+- Release deletion: <https://cli.github.com/manual/gh_release_delete>
+- Used for: `workflow_dispatch` inputs, the `contents: write` token permission, verified existing
+  tags, draft release creation, and non-interactive replacement of an existing release. The action
+  deliberately has no automatic event trigger.
+
 ## Audio specification and comparison
 
 ### General Instrument AY-3-8910/8912/8913 data manual

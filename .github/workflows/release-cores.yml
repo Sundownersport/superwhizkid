@@ -1,0 +1,164 @@
+name: Build and package cores
+
+# Intentionally manual-only while release packaging is being established.
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Tag to create or replace (for example, v0.1.0)
+        required: true
+        type: string
+      release_name:
+        description: Draft release title (blank uses the tag)
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: superwhizkid-release-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      RELEASE_NAME: ${{ inputs.release_name }}
+
+    steps:
+      - name: Check out requested source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release tag
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_TAG"
+          git check-ref-format "refs/tags/$RELEASE_TAG"
+
+      # These are the public images used by spruceUI/Cores-spruce. The ARMHF image contains the
+      # A30 Buildroot GCC 13.2/glibc 2.23 sysroot; ARM64 uses Ubuntu Focal's AArch64 toolchain.
+      - name: Download spruce toolchains
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download toolchains \
+            --repo spruceUI/Cores-spruce \
+            --pattern cores-arm64.tar.gz \
+            --dir "${{ runner.temp }}"
+          gh release download toolchains \
+            --repo spruceUI/Cores-spruce \
+            --pattern cores-armhf.tar.gz \
+            --dir "${{ runner.temp }}"
+
+      - name: Load toolchain images
+        run: |
+          set -euo pipefail
+          gunzip -c "${{ runner.temp }}/cores-arm64.tar.gz" | docker load
+          gunzip -c "${{ runner.temp }}/cores-armhf.tar.gz" | docker load
+
+      - name: Build ARM64 core
+        run: |
+          set -euo pipefail
+          mkdir -p package/cores64
+          docker run --rm \
+            -v "${{ github.workspace }}:/src" \
+            -w /src \
+            cores-arm64 \
+            bash -c '
+              set -euo pipefail
+              cmake -S . -B build-arm64 -DCMAKE_BUILD_TYPE=Release
+              cmake --build build-arm64 --parallel "$(nproc)" --target superwhizkid_libretro
+            '
+          cp build-arm64/superwhizkid_libretro.so package/cores64/
+
+      - name: Build ARMHF core
+        run: |
+          set -euo pipefail
+          mkdir -p package/cores
+          docker run --rm \
+            -v "${{ github.workspace }}:/src" \
+            -w /src \
+            cores-armhf \
+            bash -c '
+              set -euo pipefail
+              cmake -S . -B build-armhf -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_C_FLAGS="-mcpu=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard"
+              cmake --build build-armhf --parallel "$(nproc)" --target superwhizkid_libretro
+            '
+          cp build-armhf/superwhizkid_libretro.so package/cores/
+
+      - name: Verify architectures and glibc floors
+        run: |
+          set -euo pipefail
+
+          newest_glibc() {
+            objdump -T "$1" 2>/dev/null \
+              | grep -o 'GLIBC_[0-9.]*' \
+              | sort -Vu \
+              | tail -1 \
+              || true
+          }
+
+          require_floor() {
+            file_path=$1
+            maximum=$2
+            newest=$(newest_glibc "$file_path")
+            echo "$file_path: newest glibc symbol is ${newest:-none} (maximum GLIBC_$maximum)"
+            if test -n "$newest"; then
+              version=${newest#GLIBC_}
+              if test "$(printf '%s\n%s\n' "$version" "$maximum" | sort -V | tail -1)" != "$maximum"; then
+                echo "::error::$file_path requires $newest, newer than GLIBC_$maximum"
+                exit 1
+              fi
+            fi
+          }
+
+          file package/cores64/superwhizkid_libretro.so
+          file package/cores/superwhizkid_libretro.so
+          file package/cores64/superwhizkid_libretro.so | grep -Eqi 'aarch64|ARM aarch64'
+          file package/cores/superwhizkid_libretro.so | grep -q 'ARM, EABI5'
+          require_floor package/cores64/superwhizkid_libretro.so 2.31
+          require_floor package/cores/superwhizkid_libretro.so 2.23
+
+      - name: Package spruce layout
+        run: |
+          set -euo pipefail
+          cp libretro/superwhizkid_libretro.info package/
+          cp LICENSE package/
+          cd package
+          zip -9 -r ../superwhizkid_libretro.zip \
+            cores/ cores64/ superwhizkid_libretro.info LICENSE
+
+      - name: Create or replace draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          title=${RELEASE_NAME:-$RELEASE_TAG}
+
+          # An invoked release build is explicitly authoritative for its requested tag.
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release delete "$RELEASE_TAG" --yes
+          fi
+          git tag --force "$RELEASE_TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$RELEASE_TAG" --force
+
+          gh release create "$RELEASE_TAG" \
+            --verify-tag \
+            --draft \
+            --title "$title" \
+            --notes "Spruce-compatible ARMHF and ARM64 libretro cores built from commit $GITHUB_SHA. Source and GPL license are available at this tag."
+          gh release upload "$RELEASE_TAG" superwhizkid_libretro.zip --clobber
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: superwhizkid-libretro
+          path: superwhizkid_libretro.zip
+          if-no-files-found: error
