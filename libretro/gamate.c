@@ -17,13 +17,36 @@ static struct Gamate gamate;
 static bool loaded;
 static uint16_t video[GAMATE_WIDTH * GAMATE_HEIGHT];
 static int16_t audio[2048 * 2];
+static bool tapLatch;
 
 static void message(const char* text) {
 	struct retro_message msg = { text, 300 };
 	environCb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg);
 }
 
-void retro_set_environment(retro_environment_t cb) { environCb = cb; }
+void retro_set_environment(retro_environment_t cb) {
+	environCb = cb;
+	static const struct retro_core_option_definition options[] = {
+		{ "superwhizkid_tap_latch", "Catch quick taps", "Not hardware accurate. Holds a press until the game next reads the controller, so taps between its reads aren't lost.",
+			{ { "off", NULL }, { "on", NULL }, { NULL, NULL } }, "off" },
+		{ NULL, NULL, NULL, { { NULL, NULL } }, NULL }
+	};
+	static const struct retro_variable variables[] = {
+		{ "superwhizkid_tap_latch", "Catch quick taps; off|on" },
+		{ NULL, NULL }
+	};
+	unsigned version = 0;
+	if (environCb(RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION, &version) && version >= 1) {
+		environCb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS, (void*) options);
+	} else {
+		environCb(RETRO_ENVIRONMENT_SET_VARIABLES, (void*) variables);
+	}
+}
+
+static void readOptions(void) {
+	struct retro_variable var = { "superwhizkid_tap_latch", NULL };
+	tapLatch = environCb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && !strcmp(var.value, "on");
+}
 void retro_set_video_refresh(retro_video_refresh_t cb) { videoCb = cb; }
 void retro_set_audio_sample(retro_audio_sample_t cb) { (void) cb; }
 void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audioCb = cb; }
@@ -94,11 +117,18 @@ static void readInput(void) {
 	BUTTON(RETRO_DEVICE_ID_JOYPAD_START, 6);
 	BUTTON(RETRO_DEVICE_ID_JOYPAD_SELECT, 7);
 #undef BUTTON
-	gamate.buttons = buttons;
+	if (tapLatch) {
+		gamateSetButtons(&gamate, buttons);
+	} else {
+		gamate.buttons = buttons;
+		gamate.pendingPresses = 0;
+	}
 }
 
 void retro_run(void) {
 	if (!loaded) return;
+	bool updated = false;
+	if (environCb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) readOptions();
 	readInput();
 	gamateSetAudio(&gamate, audio, sizeof(audio) / sizeof(audio[0]) / 2, 48000);
 	gamateRunFrame(&gamate);
@@ -137,6 +167,7 @@ bool retro_load_game(const struct retro_game_info* game) {
 		message("superwhizkid: unsupported cartridge size");
 		return false;
 	}
+	readOptions();
 	loaded = true;
 	return true;
 }
