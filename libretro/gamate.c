@@ -36,11 +36,14 @@ void retro_set_environment(retro_environment_t cb) {
 			{ { "off", NULL }, { "on", NULL }, { NULL, NULL } }, "off" },
 		{ "superwhizkid_lcd_ghosting", "LCD ghosting", "Fades pixels like the slow Gamate LCD, so sprites the game redraws don't flash.",
 			{ { "off", NULL }, { "1", NULL }, { "2", NULL }, { "3", NULL }, { "4", NULL }, { "5", NULL }, { NULL, NULL } }, "off" },
+		{ "superwhizkid_bios", "BIOS", "Which BIOS to boot; the other is used if it's missing. Applies when the game restarts.",
+			{ { "umc", "UMC (gamate_bios_umc.bin)" }, { "bit", "Bit (gamate_bios_bit.bin)" }, { NULL, NULL } }, "umc" },
 		{ NULL, NULL, NULL, { { NULL, NULL } }, NULL }
 	};
 	static const struct retro_variable variables[] = {
 		{ "superwhizkid_tap_latch", "Catch quick taps; off|on" },
 		{ "superwhizkid_lcd_ghosting", "LCD ghosting; off|1|2|3|4|5" },
+		{ "superwhizkid_bios", "BIOS; umc|bit" },
 		{ NULL, NULL }
 	};
 	unsigned version = 0;
@@ -182,7 +185,13 @@ void retro_run(void) {
 static bool readBios(uint8_t* out) {
 	const char* system = NULL;
 	if (!environCb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system) || !system) return false;
-	static const char* names[] = { "gamate_bios_umc.bin", "gamate_bios_bit.bin" };
+	struct retro_variable var = { "superwhizkid_bios", NULL };
+	bool bitFirst = environCb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && !strcmp(var.value, "bit");
+	const char* names[] = { "gamate_bios_umc.bin", "gamate_bios_bit.bin" };
+	if (bitFirst) {
+		names[0] = "gamate_bios_bit.bin";
+		names[1] = "gamate_bios_umc.bin";
+	}
 	char path[4096];
 	for (size_t i = 0; i < sizeof(names) / sizeof(*names); i++) {
 		if (snprintf(path, sizeof(path), "%s/%s", system, names[i]) >= (int) sizeof(path)) continue;
