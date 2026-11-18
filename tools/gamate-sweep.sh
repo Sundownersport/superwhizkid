@@ -12,7 +12,7 @@ fi
 rom_directory=$1
 frames=${2:-300}
 runner=${3:-build/gamateboot}
-report=${4:-/tmp/armgamate-sweep.txt}
+report=${4:-/tmp/superwhizkid-sweep.txt}
 
 if [[ ! -d $rom_directory || ! -x $runner || ! $frames =~ ^[0-9]+$ || $frames == 0 ]]; then
 	echo "invalid ROM directory, frame count, or gamateboot executable" >&2
@@ -34,10 +34,10 @@ if (( ${#cartridges[@]} == 0 )); then
 	exit 2
 fi
 
-temporary=$(mktemp /tmp/armgamate-sweep-run-XXXXXX)
+temporary=$(mktemp /tmp/superwhizkid-sweep-run-XXXXXX)
 trap 'rm -f "$temporary"' EXIT
 : > "$report" || exit 2
-printf 'armGamate local compatibility sweep\nframes-after-entry: %s\ncartridges: %s\nbioses: %s\n\n' \
+printf 'superwhizkid local compatibility sweep\nframes-after-entry: %s\ncartridges: %s\nbioses: %s\n\n' \
 	"$frames" "${#cartridges[@]}" "${#bioses[@]}" >> "$report"
 
 passes=0

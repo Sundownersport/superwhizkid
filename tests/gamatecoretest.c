@@ -12,7 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 
-static char systemDirectory[] = "/tmp/armgamate-coretest-XXXXXX";
+static char systemDirectory[] = "/tmp/superwhizkid-coretest-XXXXXX";
 static unsigned activeButton = ~0u, polls, videoFrames, audioBatches;
 static bool videoVaries, audioActive;
 

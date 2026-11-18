@@ -1,6 +1,6 @@
 # Gamate implementation sources
 
-This file records the sources used while developing armNES's Gamate backend, what each source was
+This file records the sources used while developing superwhizkid, what each source was
 used for, and important disagreements between them. It should be updated whenever a new source
 influences implementation or tests.
 
@@ -60,7 +60,7 @@ hardware measurements take precedence where they conflict with an emulator.
 - Core-info template: <https://github.com/libretro/libretro-core-info/blob/master/00_example_libretro.info>
 - Installation guide: <https://docs.libretro.com/guides/download-cores/>
 - Used for: declaring save-state support and its `serialized` feature level in
-  `armgamate_libretro.info`, and confirming that an out-of-tree core may load without its info file
+  `superwhizkid_libretro.info`, and confirming that an out-of-tree core may load without its info file
   while RetroArch leaves metadata-gated features such as save states disabled.
 - Implementation impact: the shipped info file now advertises the serialization backend already
   implemented by the core. This metadata affects frontend feature discovery only; it does not
@@ -107,7 +107,7 @@ the PSG runs at 4.433 MHz / 4; channel A goes left, B right, and C to both sides
 - Used for: identifying currently recognized BIOS variants, known cartridge sizes/types, and
   compatibility-oriented edge cases to investigate against primary notes or tests.
 - Not used as the sole specification. In particular, its `$5800/$5A00` card-presence behavior
-  differs from Kevtris's measured open-bus/`xx11` description; armNES currently follows the primary
+  differs from Kevtris's measured open-bus/`xx11` description; superwhizkid follows the primary
   hardware notes and records the disagreement here.
 
 ## CPU specification and validation
@@ -257,7 +257,7 @@ into the repository, build output, tests, or releases.
   query of the built core returned its 89,568-byte fixed state size. The cause was the isolated test
   configuration not loading this out-of-tree core's metadata. The test configuration now points at
   the repository info directory and treats `build/` as its core directory, allowing RetroArch to
-  index and associate the out-of-tree `.so` with `armgamate_libretro.info`. With that installation-
+  index and associate the out-of-tree `.so` with `superwhizkid_libretro.info`. With that installation-
   equivalent layout, GP Race successfully saved and restored an 89,568-byte core payload (89,592
   bytes in RetroArch's state file). The shipped info file explicitly declares serialized-state
   support following the official libretro template. Temporary traces were removed. A bypass test
@@ -274,13 +274,13 @@ into the repository, build output, tests, or releases.
   contents are not derived from, intended to reproduce, or usable as a replacement for the UMC
   firmware. The harness verifies all eight active-low input mappings, video and audio callbacks, the
   fixed state size before/after content load, serialization restoration, reset, unload, and a second
-  content load. This program is test scaffolding authored for armNES; no emulator source or
+  content load. This program is test scaffolding authored for superwhizkid; no emulator source or
   commercial firmware, BIOS, or game-ROM bytes were used to create it.
 - `tools/gamate-sweep.sh` ran all 58 locally supplied cartridges under both validated BIOS revisions
   for 300 frames after `$6020`: 116/116 combinations booted and produced nonblank video with no
   unsupported opcode or persistent self-loop diagnosis. Cartridge sizes covered 16, 32, 64, 128,
   256, and 512 KiB, including the fingerprinted 4-in-1 mapper. The report remains outside the
-  repository at `/tmp/armgamate-sweep.txt` and contains filenames, hashes, and counters but no input
+  repository at `/tmp/superwhizkid-sweep.txt` and contains filenames, hashes, and counters but no input
   bytes. This is broad automated smoke coverage, not a claim that every title is playable or
   hardware-accurate.
 - Two titles were silent during this unattended 300-frame window under both BIOSes: Further

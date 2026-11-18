@@ -56,7 +56,7 @@ unsigned retro_api_version(void) { return RETRO_API_VERSION; }
 
 void retro_get_system_info(struct retro_system_info* info) {
 	memset(info, 0, sizeof(*info));
-	info->library_name = "armGamate";
+	info->library_name = "superwhizkid";
 	info->library_version = "0.1";
 	info->valid_extensions = "bin|gam";
 	info->need_fullpath = false;
@@ -130,11 +130,11 @@ bool retro_load_game(const struct retro_game_info* game) {
 	if (!game || !game->data || !game->size) return false;
 	uint8_t bios[GAMATE_BIOS_SIZE];
 	if (!readBios(bios)) {
-		message("armGamate: gamate_bios_umc.bin or gamate_bios_bit.bin is required");
+		message("superwhizkid: gamate_bios_umc.bin or gamate_bios_bit.bin is required");
 		return false;
 	}
 	if (!gamateLoad(&gamate, game->data, game->size, bios, sizeof(bios))) {
-		message("armGamate: unsupported cartridge size");
+		message("superwhizkid: unsupported cartridge size");
 		return false;
 	}
 	loaded = true;

@@ -1,8 +1,8 @@
 /* Copyright (c) 2026 Ry
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
-#ifndef ARMNES_GAMATE_H
-#define ARMNES_GAMATE_H
+#ifndef SUPERWHIZKID_GAMATE_H
+#define SUPERWHIZKID_GAMATE_H
 
 #include <stdbool.h>
 #include <stddef.h>
