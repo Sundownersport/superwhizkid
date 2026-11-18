@@ -569,6 +569,18 @@ static void testAudio(void) {
 	}
 	assert(left && !right);
 
+	// Period 2 is ultrasonic. It must settle to silence instead of aliasing into an audible whistle.
+	memset(audio, 0, sizeof(audio));
+	gamateReset(&g);
+	gamateWrite(&g, 0x4000, 2);
+	gamateWrite(&g, 0x4007, 0x3E);
+	gamateWrite(&g, 0x4008, 15);
+	gamateRunClocks(&g, 443300);
+	for (size_t i = g.audioCount - 100; i < g.audioCount; i++) {
+		assert(audio[i * 2] >= -1 && audio[i * 2] <= 1);
+		assert(audio[i * 2 + 1] == 0);
+	}
+
 	memset(audio, 0, sizeof(audio));
 	gamateReset(&g);
 	gamateWrite(&g, 0x4002, 10);

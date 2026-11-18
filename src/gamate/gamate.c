@@ -353,12 +353,20 @@ static void ayClock(struct Gamate* g) {
 
 static int channelLevel(const struct Gamate* g, int channel) {
 	static const uint8_t levels[16] = { 0, 1, 2, 3, 5, 7, 11, 15, 22, 31, 45, 63, 90, 127, 180, 255 };
-	bool tone = (g->ayRegisters[7] & (1 << channel)) || g->ay.toneLevel[channel];
+	bool toneDisabled = g->ayRegisters[7] & (1 << channel);
 	bool noise = (g->ayRegisters[7] & (8 << channel)) || g->ay.noiseLevel;
-	if (!tone || !noise) return 0;
+	if (!noise) return 0;
 	uint8_t volume = g->ayRegisters[8 + channel];
 	uint8_t index = volume & 0x10 ? (g->ay.envelopeStep ^ g->ay.envelopeAttack) : volume & 0x0F;
-	return levels[index];
+	int level = levels[index];
+	if (toneDisabled) return level;
+
+	// A point-sampled square wave above Nyquist aliases into a loud, false whistle. The physical
+	// speaker cannot reproduce these ultrasonic periods; retain their average (50% duty) level so
+	// noise mixing remains correct, then let the output high-pass remove the resulting DC.
+	uint32_t period = tonePeriod(g, channel);
+	if ((uint64_t) period * g->sampleRate <= 4433000) return level / 2;
+	return g->ay.toneLevel[channel] ? level : 0;
 }
 
 static void audioSample(struct Gamate* g) {
