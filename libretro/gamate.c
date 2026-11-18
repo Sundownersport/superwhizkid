@@ -17,7 +17,7 @@ static struct Gamate gamate;
 static bool loaded;
 static uint16_t video[GAMATE_WIDTH * GAMATE_HEIGHT];
 static int16_t audio[2048 * 2];
-static bool tapLatch;
+static bool tapLatch, skipIntro;
 static const uint16_t palette[4] = { 0xCE93, 0x8CEB, 0x5327, 0x1102 };
 static uint16_t shades[3 * 256 + 1];
 static uint16_t lcdLevel[GAMATE_WIDTH * GAMATE_HEIGHT];
@@ -38,12 +38,15 @@ void retro_set_environment(retro_environment_t cb) {
 			{ { "off", NULL }, { "1", NULL }, { "2", NULL }, { "3", NULL }, { "4", NULL }, { "5", NULL }, { NULL, NULL } }, "off" },
 		{ "superwhizkid_bios", "BIOS", "Which BIOS to boot; the other is used if it's missing. Applies when the game restarts.",
 			{ { "umc", "UMC (gamate_bios_umc.bin)" }, { "bit", "Bit (gamate_bios_bit.bin)" }, { NULL, NULL } }, "umc" },
+		{ "superwhizkid_skip_intro", "Skip BIOS intro", "Runs the BIOS logo sequence instantly at power-on and reset, starting at the cartridge.",
+			{ { "off", NULL }, { "on", NULL }, { NULL, NULL } }, "off" },
 		{ NULL, NULL, NULL, { { NULL, NULL } }, NULL }
 	};
 	static const struct retro_variable variables[] = {
 		{ "superwhizkid_tap_latch", "Catch quick taps; off|on" },
 		{ "superwhizkid_lcd_ghosting", "LCD ghosting; off|1|2|3|4|5" },
 		{ "superwhizkid_bios", "BIOS; umc|bit" },
+		{ "superwhizkid_skip_intro", "Skip BIOS intro; off|on" },
 		{ NULL, NULL }
 	};
 	unsigned version = 0;
@@ -57,6 +60,10 @@ void retro_set_environment(retro_environment_t cb) {
 static void readOptions(void) {
 	struct retro_variable var = { "superwhizkid_tap_latch", NULL };
 	tapLatch = environCb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && !strcmp(var.value, "on");
+
+	var.key = "superwhizkid_skip_intro";
+	var.value = NULL;
+	skipIntro = environCb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && !strcmp(var.value, "on");
 
 	var.key = "superwhizkid_lcd_ghosting";
 	var.value = NULL;
@@ -143,8 +150,20 @@ void retro_set_controller_port_device(unsigned port, unsigned device) {
 	(void) device;
 }
 
+// Runs the real BIOS boot unseen until it jumps to the cartridge entry.
+static void runIntro(void) {
+	gamateSetAudio(&gamate, audio, sizeof(audio) / sizeof(audio[0]) / 2, 48000);
+	for (unsigned long i = 0; i < 20000000 && !(gamate.protectionPassed && gamate.cpu.pc == 0x6020); i++) {
+		gamate.audioCount = 0;
+		gamateRunClocks(&gamate, gamateCpuStep(&gamate) * 2);
+	}
+	gamate.audioCount = 0;
+}
+
 void retro_reset(void) {
-	if (loaded) gamateReset(&gamate);
+	if (!loaded) return;
+	gamateReset(&gamate);
+	if (skipIntro) runIntro();
 	lcdSnap = true;
 }
 
@@ -217,6 +236,7 @@ bool retro_load_game(const struct retro_game_info* game) {
 		return false;
 	}
 	readOptions();
+	if (skipIntro) runIntro();
 	lcdSnap = true;
 	loaded = true;
 	return true;
